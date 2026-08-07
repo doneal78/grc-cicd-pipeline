@@ -1,0 +1,44 @@
+stages:
+  - lint
+  - security
+  - import
+
+variables:
+  PYTHON_VERSION: "3.11"
+
+lint:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - pip install flake8
+  script:
+    - flake8 --max-line-length=120 --exclude=.venv .
+  allow_failure: true
+
+sast:
+  stage: security
+  image: python:3.11-slim
+  before_script:
+    - pip install bandit
+  script:
+    - bandit -r . --exclude ./.venv -f json -o gl-sast-report.json || true
+    - bandit -r . --exclude ./.venv
+  artifacts:
+    when: always
+    paths:
+      - gl-sast-report.json
+    expire_in: 30 days
+  allow_failure: true
+
+import-to-security-hub:
+  stage: import
+  image: python:3.11-slim
+  before_script:
+    - pip install boto3
+  script:
+    - python asff_transformer.py
+  dependencies:
+    - sast
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure: true
